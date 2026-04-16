@@ -932,10 +932,12 @@
         <div>
           <div class="panel-title"><span class="icon">💬</span> Chat / Streaming</div>
           <div class="panel-subtitle">
-            <span id="modeIndicator">–</span> · task ID: <span id="currentTaskId" style="color:var(--accent);">none</span>
+            <span id="modeIndicator">–</span> · task ID: <span id="currentTaskId" style="color:var(--accent);">none</span> · 
+            context ID: <span id="currentContextId" style="color:var(--accent2);cursor:pointer;" onclick="copyCurrentContextId()" title="Click to copy">–</span>
           </div>
         </div>
         <div class="panel-actions">
+          <button class="btn btn-ghost btn-sm" onclick="fetchAndDisplayPushNotifications()" title="Check for push notifications">🔔 Refresh</button>
           <button class="btn btn-ghost btn-sm" onclick="toggleRawDrawer()">Raw I/O</button>
           <button class="btn btn-danger btn-sm" onclick="clearChat()">Clear</button>
         </div>
@@ -1036,30 +1038,64 @@
         <!-- Set Config -->
         <div class="push-box">
           <div class="section-title">⚙️ Configure Push Webhook</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;">
+            Register a webhook URL to receive real-time notifications when tasks complete, fail, or change state.
+          </div>
           <div class="input-group">
-            <label class="input-label">Task ID (for notification subscription)</label>
-            <input type="text" id="pushTaskId" placeholder="Task ID to subscribe notifications for" />
+            <label class="input-label">Context ID (auto-filled from session)</label>
+            <input type="text" id="pushContextId" readonly style="cursor:auto;background:var(--panel);color:var(--text);" />
+            <div style="font-size:9px;color:var(--text-dim);margin-top:3px;">💡 Tip: Context ID represents your conversation. All messages in this session will send notifications to the same webhook.</div>
           </div>
           <div class="input-group">
             <label class="input-label">Webhook URL (your endpoint to receive push events)</label>
-            <input type="text" id="pushUrl" value="http://localhost:9000/push" placeholder="https://yourserver.com/webhook" />
+            <input type="text" id="pushUrl" value="http://localhost:10000/push" placeholder="https://yourserver.com/webhook" />
+            <div style="font-size:9px;color:var(--text-dim);margin-top:3px;">💡 Tip: Run a local webhook receiver or use ngrok to expose localhost</div>
           </div>
           <div class="input-group">
-            <label class="input-label">Push Auth Token (optional — sent to your webhook)</label>
+            <label class="input-label">Push Auth Token (optional — sent as Bearer token to your webhook)</label>
             <input type="text" id="pushAuthToken" placeholder="optional bearer token for your webhook" />
           </div>
           <div class="flex-row mt8">
-            <button class="btn btn-primary btn-sm" onclick="setPushConfig()">Set Config</button>
-            <button class="btn btn-ghost btn-sm" onclick="getPushConfig()">Get Current Config</button>
+            <button class="btn btn-primary btn-sm" onclick="setPushConfig()">✓ Activate Webhooks</button>
+            <button class="btn btn-ghost btn-sm" onclick="getPushConfig()">🔍 Check Status</button>
+            <button class="btn btn-ghost btn-sm" onclick="clearPushConfig()">✕ Clear</button>
+          </div>
+          <div id="pushConfigStatus" style="font-size:11px;margin-top:8px;display:none;"></div>
+        </div>
+
+        <!-- Quick Setup Guide -->
+        <div class="push-box">
+          <div class="section-title">🚀 Super Simple Setup</div>
+          <div style="font-size:11px;color:var(--text-muted);line-height:1.6;">
+            <strong>Step 1:</strong> Set your webhook URL above (or keep http://localhost:10000/push)<br/>
+            <strong>Step 2:</strong> Click "Activate Webhooks"<br/>
+            <strong>Step 3:</strong> Send messages in Chat tab<br/>
+            <strong>Done!</strong> All messages in this conversation will send notifications<br/>
+            <br/>
+            The Context ID stays the same for the whole conversation, so you only need to set this once!<br/>
+            <br/>
+            <strong>For Real Webhooks:</strong><br/>
+            Create a simple Python webhook receiver and run:<br/>
+            <code style="display:block;background:var(--panel);padding:8px;border-radius:4px;margin-top:6px;">
+from fastapi import FastAPI<br/>
+app = FastAPI()<br/>
+@app.post("/push")<br/>
+async def push(request: Request):<br/>
+&nbsp;&nbsp;data = await request.json()<br/>
+&nbsp;&nbsp;print(f"✓ {data['contextId']}: {data['status']['state']}")<br/>
+&nbsp;&nbsp;return {"ok": True}<br/>
+<br/>
+# uvicorn app:app --port 10000
+            </code>
           </div>
         </div>
 
-        <!-- Mock Webhook Listener -->
+        <!-- Webhook Activity Log -->
         <div class="push-box">
-          <div class="section-title">📥 Simulated Webhook Log</div>
+          <div class="section-title">📥 Webhook Activity Log</div>
           <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">
-            Since browsers can't host a real server, this simulates what push payloads
-            would look like. Click "Simulate Push Event" to see an example payload.
+            Shows JSON-RPC requests and responses for push notification operations.
+            Actual webhook payload delivery is handled by your webhook server.
           </div>
           <div class="push-log" id="pushLog">
             <div class="push-log-entry">
@@ -1068,15 +1104,47 @@
             </div>
           </div>
           <div class="flex-row mt8">
-            <button class="btn btn-ghost btn-sm" onclick="simulatePushEvent()">Simulate Push Event</button>
+            <button class="btn btn-ghost btn-sm" onclick="simulatePushEvent()">📋 Show Example Payload</button>
+            <button class="btn btn-primary btn-sm" onclick="simulatePushNotification()">🧪 Test in Chat</button>
             <button class="btn btn-ghost btn-sm" onclick="clearPushLog()">Clear Log</button>
           </div>
         </div>
 
-        <!-- Push Config Result -->
+        <!-- Received Push Notifications -->
+        <div class="push-box">
+          <div class="section-title">✅ Received Push Notifications</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">
+            Real-time push notifications received from the agent executor. 
+            Auto-updating every second for the current conversation context.
+          </div>
+          <div class="push-log" id="receivedNotificationsLog" style="min-height:100px;max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:4px;padding:8px;">
+            <div class="push-log-entry">
+              <span class="ple-time">--:--:--</span>
+              <span class="ple-text" style="color:var(--text-dim);">No notifications received yet…</span>
+            </div>
+          </div>
+          <div class="flex-row mt8">
+            <button class="btn btn-primary btn-sm" onclick="refreshReceivedNotifications()">🔄 Refresh</button>
+            <button class="btn btn-ghost btn-sm" onclick="clearReceivedNotifications()">Clear</button>
+          </div>
+        </div>
+
+        <!-- Push Config Response -->
         <div class="push-box" id="pushConfigResult" style="display:none;">
-          <div class="section-title">📄 Push Config Response</div>
+          <div class="section-title">📋 JSON-RPC Response</div>
           <pre class="json-viewer" id="pushConfigJson"></pre>
+          <div style="font-size:10px;color:var(--text-dim);margin-top:8px;">
+            ✓ Configuration registered with agent. Webhook will receive notifications when task states change.
+          </div>
+        </div>
+
+        <!-- Push Example Payload -->
+        <div class="push-box" id="pushExampleResult" style="display:none;">
+          <div class="section-title">📤 Example Webhook Payload</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">
+            Your webhook will receive POST requests with payloads like this:
+          </div>
+          <pre class="json-viewer" id="pushExampleJson"></pre>
         </div>
 
       </div>
@@ -1374,6 +1442,9 @@ async function sendMessage() {
   input.style.height = '';
 
   document.getElementById('modeIndicator').textContent = streaming ? 'message/stream (SSE)' : 'message/send';
+  
+  // Update context ID display
+  updateCurrentContextId(state.contextId);
 
   const msgId = newUUID();
   const body = buildJsonRpc(streaming ? 'message/stream' : 'message/send', {
@@ -1412,6 +1483,7 @@ async function sendNonStreaming(body, useAuth) {
     if (taskId) {
       updateCurrentTaskId(taskId);
       addTaskToHistory(taskId, result?.status?.state || 'unknown');
+      state.lastTaskId = taskId;  // Store for push notification simulation
     }
 
     const text = extractText(result);
@@ -1526,6 +1598,7 @@ async function sendStreaming(body, useAuth) {
 
     document.getElementById('rawRes').textContent = rawLines.join('');
     if (taskId) addTaskToHistory(taskId, lastStatus || 'completed');
+    if (taskId) state.lastTaskId = taskId;  // Store for push notification simulation
     updateAgentMsg(agentMsgEl, buffer || '(stream ended with no text)', taskId, lastStatus || 'completed', false);
     addLog('SSE', `Stream closed — task: ${taskId}`);
   } catch(e) {
@@ -1634,6 +1707,60 @@ function updateCurrentTaskId(id) {
   document.getElementById('taskIdInput').value = id;
 }
 
+function updateCurrentContextId(id) {
+  document.getElementById('currentContextId').textContent = id.substring(0,16) + '…';
+}
+
+function copyCurrentContextId() {
+  navigator.clipboard.writeText(state.contextId);
+  const el = document.getElementById('currentContextId');
+  const original = el.textContent;
+  el.textContent = '✓ Copied!';
+  el.style.color = 'var(--green)';
+  setTimeout(() => {
+    el.textContent = original;
+    el.style.color = 'var(--accent2)';
+  }, 1500);
+}
+
+// Track displayed notifications to avoid duplicates
+state.displayedNotificationIds = new Set();
+
+async function fetchAndDisplayPushNotifications() {
+  if (!state.contextId) return;
+  
+  try {
+    const response = await fetch(`${state.agentUrl}/push/notifications?contextId=${encodeURIComponent(state.contextId)}`, {
+      method: 'GET'
+    });
+    
+    if (!response.ok) return;
+    
+    const data = await response.json();
+    if (!data.ok || !data.notifications) return;
+    
+    // Display new notifications
+    for (const notif of data.notifications) {
+      const notifId = `${notif.taskId}-${notif.status?.state || 'unknown'}-${notif.timestamp}`;
+      
+      if (!state.displayedNotificationIds.has(notifId)) {
+        state.displayedNotificationIds.add(notifId);
+        displayPushNotification(notif);
+      }
+    }
+  } catch (e) {
+    // Silently fail - webhook server may not be running
+  }
+}
+
+// Poll for push notifications every 1 second while on chat tab
+setInterval(() => {
+  const chatTab = document.getElementById('tab-chat');
+  if (chatTab && chatTab.classList.contains('active') && state.contextId) {
+    fetchAndDisplayPushNotifications().catch(() => {});
+  }
+}, 1000);
+
 function clearChat() {
   document.getElementById('chatMessages').innerHTML = `
     <div class="chat-empty">
@@ -1642,6 +1769,7 @@ function clearChat() {
     </div>
   `;
   document.getElementById('currentTaskId').textContent = 'none';
+  updateCurrentContextId(state.contextId);
 }
 
 // ══════════════════════════════════════════════
@@ -1761,19 +1889,31 @@ function loadTaskId(id) {
 // ══════════════════════════════════════════════
 async function setPushConfig() {
   readInputs();
-  const taskId   = document.getElementById('pushTaskId').value.trim();
-  const url      = document.getElementById('pushUrl').value.trim();
-  const token    = document.getElementById('pushAuthToken').value.trim();
-  if (!taskId || !url) {
-    pushLog('err', 'Task ID and Webhook URL are required');
+  const contextId = state.contextId || document.getElementById('pushContextId').value.trim();
+  const url       = document.getElementById('pushUrl').value.trim();
+  const token     = document.getElementById('pushAuthToken').value.trim();
+  
+  if (!contextId) {
+    pushLog('err', '❌ Context ID is required (set a message first)');
     return;
   }
+  if (!url) {
+    pushLog('err', '❌ Webhook URL is required');
+    return;
+  }
+  
   const config = { url };
   if (token) config.authentication = { schemes: { bearerAuth: {} }, credentials: token };
 
-  const body = buildJsonRpc('tasks/pushNotificationConfig/set', { id: taskId, pushNotificationConfig: config });
-  addLog('SEND', `tasks/pushNotificationConfig/set — task: ${taskId}`);
+  const body = buildJsonRpc('tasks/pushNotificationConfig/set', { 
+    contextId: contextId, 
+    pushNotificationConfig: config 
+  });
+  
+  addLog('SEND', `tasks/pushNotificationConfig/set — context: ${contextId.substring(0,16)}…`);
   document.getElementById('rawReq').textContent = JSON.stringify(body, null, 2);
+  pushLog('info', `📤 Activating webhooks for conversation ${contextId.substring(0,12)}…`);
+  
   try {
     const useAuth = document.getElementById('authToggle').checked;
     const res = await fetch(`${state.agentUrl}/`, {
@@ -1783,23 +1923,46 @@ async function setPushConfig() {
     });
     const json = await res.json();
     document.getElementById('rawRes').textContent = JSON.stringify(json, null, 2);
-    if (json.error) throw new Error(json.error.message || JSON.stringify(json.error));
-    addLog('RECV', `Push config set OK for task: ${taskId}`);
-    pushLog('ok', `Push config registered for task ${taskId.substring(0,12)}…`);
+    
+    if (json.error) {
+      throw new Error(json.error.message || JSON.stringify(json.error));
+    }
+    
+    addLog('RECV', `✓ Push webhooks activated for context: ${contextId.substring(0,16)}…`);
+    pushLog('ok', `✓ Webhooks active: ${url.substring(0,40)}…`);
     showPushConfigResult(json.result || json);
+    
+    // Show status
+    const statusEl = document.getElementById('pushConfigStatus');
+    statusEl.style.display = 'block';
+    statusEl.style.color = 'var(--green)';
+    statusEl.innerHTML = `✓ Webhooks active for this conversation`;
+    
   } catch(e) {
-    addLog('ERROR', `pushNotificationConfig/set failed: ${e.message}`);
-    pushLog('err', `Failed: ${e.message}`);
+    addLog('ERROR', `✗ pushNotificationConfig/set failed: ${e.message}`);
+    pushLog('err', `✗ Failed: ${e.message}`);
+    
+    const statusEl = document.getElementById('pushConfigStatus');
+    statusEl.style.display = 'block';
+    statusEl.style.color = 'var(--red)';
+    statusEl.innerHTML = `✗ Error: ${e.message}`;
   }
 }
 
 async function getPushConfig() {
   readInputs();
-  const taskId = document.getElementById('pushTaskId').value.trim();
-  if (!taskId) { pushLog('err', 'Task ID is required'); return; }
-
-  const body = buildJsonRpc('tasks/pushNotificationConfig/get', { id: taskId });
-  addLog('SEND', `tasks/pushNotificationConfig/get — ${taskId}`);
+  const contextId = state.contextId || document.getElementById('pushContextId').value.trim();
+  
+  if (!contextId) {
+    pushLog('err', '❌ Context ID is required (set a message first)');
+    return;
+  }
+  
+  const body = buildJsonRpc('tasks/pushNotificationConfig/get', { contextId: contextId });
+  addLog('SEND', `tasks/pushNotificationConfig/get — ${contextId.substring(0,16)}…`);
+  document.getElementById('rawReq').textContent = JSON.stringify(body, null, 2);
+  pushLog('info', `🔍 Checking webhook status for ${contextId.substring(0,12)}…`);
+  
   try {
     const useAuth = document.getElementById('authToggle').checked;
     const res = await fetch(`${state.agentUrl}/`, {
@@ -1808,39 +1971,88 @@ async function getPushConfig() {
       body: JSON.stringify(body),
     });
     const json = await res.json();
-    if (json.error) throw new Error(json.error.message || JSON.stringify(json.error));
-    addLog('RECV', `Push config get OK`);
-    pushLog('info', `Push config retrieved for ${taskId.substring(0,12)}…`);
+    document.getElementById('rawRes').textContent = JSON.stringify(json, null, 2);
+    
+    if (json.error) {
+      throw new Error(json.error.message || JSON.stringify(json.error));
+    }
+    
+    addLog('RECV', `✓ Webhook status retrieved`);
+    pushLog('ok', `✓ Status OK for ${contextId.substring(0,12)}…`);
     showPushConfigResult(json.result || json);
+    
+    const statusEl = document.getElementById('pushConfigStatus');
+    statusEl.style.display = 'block';
+    statusEl.style.color = 'var(--accent)';
+    const cfg = (json.result || json).config;
+    statusEl.innerHTML = `✓ Webhook: ${(cfg.url || '–').substring(0,40)}…`;
+    
   } catch(e) {
-    addLog('ERROR', `pushNotificationConfig/get failed: ${e.message}`);
-    pushLog('err', `Failed: ${e.message}`);
+    addLog('ERROR', `✗ pushNotificationConfig/get failed: ${e.message}`);
+    pushLog('err', `✗ Failed: ${e.message}`);
+    
+    const statusEl = document.getElementById('pushConfigStatus');
+    statusEl.style.display = 'block';
+    statusEl.style.color = 'var(--red)';
+    statusEl.innerHTML = `✗ Error: ${e.message}`;
   }
+}
+
+function clearPushConfig() {
+  document.getElementById('pushTaskId').value = '';
+  document.getElementById('pushUrl').value = 'http://localhost:10000/push';
+  document.getElementById('pushAuthToken').value = '';
+  document.getElementById('pushConfigStatus').style.display = 'none';
+  pushLog('info', '🗑️ Cleared configuration inputs');
 }
 
 function showPushConfigResult(data) {
   const box = document.getElementById('pushConfigResult');
   box.style.display = 'block';
   document.getElementById('pushConfigJson').innerHTML = syntaxHighlightJson(data);
+  // Scroll to result
+  box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function simulatePushEvent() {
   const taskId = document.getElementById('pushTaskId').value || newUUID();
   const payload = {
     taskId,
-    status: { state: 'completed' },
+    contextId: state.contextId,
+    status: { 
+      state: 'completed',
+      message: {
+        parts: [{ text: 'The calculation is complete.' }]
+      }
+    },
+    artifacts: [
+      {
+        parts: [{ text: 'Result: 16' }],
+        name: 'conversion_result'
+      }
+    ],
     timestamp: new Date().toISOString(),
-    artifacts: [{ parts: [{ text: 'The answer is 42.' }] }],
   };
-  pushLog('info', `PUSH RECEIVED: ${JSON.stringify(payload)}`);
-  showPushConfigResult(payload);
+  
+  pushLog('info', `📋 Example payload (would be POST to your webhook):`);
+  showPushExamplePayload(payload);
+}
+
+function showPushExamplePayload(data) {
+  const box = document.getElementById('pushExampleResult');
+  box.style.display = 'block';
+  document.getElementById('pushExampleJson').innerHTML = syntaxHighlightJson(data);
+  box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function pushLog(type, msg) {
   const el = document.getElementById('pushLog');
+  
+  // Clear initial waiting message
   if (el.children.length === 1 && el.children[0].querySelector('.ple-text')?.textContent.includes('Waiting')) {
     el.innerHTML = '';
   }
+  
   const cls = type === 'ok' ? 'ok' : type === 'err' ? 'err' : 'info';
   const div = document.createElement('div');
   div.className = 'push-log-entry';
@@ -1856,6 +2068,128 @@ function clearPushLog() {
       <span class="ple-text">Log cleared…</span>
     </div>
   `;
+}
+
+// Track displayed received notifications
+state.displayedReceivedNotifIds = new Set();
+
+async function refreshReceivedNotifications() {
+  if (!state.contextId) {
+    const el = document.getElementById('receivedNotificationsLog');
+    el.innerHTML = '<div class="push-log-entry"><span class="ple-text" style="color:var(--red);">❌ No context ID available</span></div>';
+    return;
+  }
+  
+  try {
+    const response = await fetch(`${state.agentUrl}/push/notifications?contextId=${encodeURIComponent(state.contextId)}`);
+    if (!response.ok) throw new Error('Failed to fetch notifications');
+    
+    const data = await response.json();
+    if (!data.ok) {
+      document.getElementById('receivedNotificationsLog').innerHTML = 
+        `<div class="push-log-entry"><span class="ple-text" style="color:var(--text-dim);">No notifications for this context</span></div>`;
+      return;
+    }
+    
+    const notifications = data.notifications || [];
+    const el = document.getElementById('receivedNotificationsLog');
+    
+    if (notifications.length === 0) {
+      el.innerHTML = '<div class="push-log-entry"><span class="ple-text" style="color:var(--text-dim);">No notifications received yet…</span></div>';
+      return;
+    }
+    
+    // Display all notifications
+    let html = '';
+    for (const notif of notifications) {
+      const status = notif.status?.state || '?';
+      const timestamp = notif.timestamp ? new Date(notif.timestamp).toLocaleTimeString() : '??:??:??';
+      const message = notif.status?.message?.parts?.[0]?.text || '';
+      
+      let statusColor = 'var(--accent)';
+      let statusIcon = '⚙️';
+      if (status === 'completed') {
+        statusColor = 'var(--green)';
+        statusIcon = '✓';
+      } else if (status === 'failed') {
+        statusColor = 'var(--red)';
+        statusIcon = '✗';
+      } else if (status === 'working') {
+        statusColor = 'var(--yellow)';
+        statusIcon = '⏳';
+      }
+      
+      html += `
+        <div class="push-log-entry" style="border-left:3px solid ${statusColor}">
+          <span class="ple-time">${timestamp}</span>
+          <span class="ple-text" style="color:${statusColor};margin-left:8px;">
+            ${statusIcon} <strong>${status.toUpperCase()}</strong>
+            ${message ? ` - ${escapeHtml(message.substring(0, 50))}` : ''}
+          </span>
+        </div>
+      `;
+    }
+    
+    el.innerHTML = html;
+    el.scrollTop = el.scrollHeight;
+  } catch (e) {
+    const el = document.getElementById('receivedNotificationsLog');
+    el.innerHTML = `<div class="push-log-entry"><span class="ple-text" style="color:var(--red);">❌ Error: ${escapeHtml(e.message)}</span></div>`;
+  }
+}
+
+function clearReceivedNotifications() {
+  const el = document.getElementById('receivedNotificationsLog');
+  el.innerHTML = '<div class="push-log-entry"><span class="ple-text" style="color:var(--text-dim);">Cleared</span></div>';
+  
+  // Also clear on server if context exists
+  if (state.contextId) {
+    fetch(`${state.agentUrl}/push/clear?contextId=${encodeURIComponent(state.contextId)}`, { method: 'POST' }).catch(() => {});
+  }
+}
+
+// Auto-poll for received notifications when on Push Notifications tab
+setInterval(() => {
+  const pushTab = document.getElementById('tab-push');
+  if (pushTab && pushTab.classList.contains('active') && state.contextId) {
+    refreshReceivedNotifications().catch(() => {});
+  }
+}, 1000);
+
+function displayPushNotification(payload) {
+  // Display push notification in the chat area
+  const status = payload.status?.state || 'unknown';
+  const statusMsg = payload.status?.message?.parts?.[0]?.text || '';
+  const taskId = payload.taskId;
+  const contextId = payload.contextId;
+  
+  let message = `[${status.toUpperCase()}] Task: ${taskId?.substring(0,12) || '?'}`;
+  if (statusMsg) message += `\n${statusMsg}`;
+  
+  const msgEl = appendMsg('system', message);
+  msgEl.style.backgroundColor = 'rgba(0,229,255,0.08)';
+  msgEl.style.borderLeft = `3px solid var(--${status === 'completed' ? 'green' : status === 'failed' ? 'red' : 'accent'})`;
+  
+  // Also add to logs
+  addLog('PUSH', `Push notification: ${status} for task ${taskId?.substring(0,12)}`);
+}
+
+function simulatePushNotification() {
+  // Test push notification display
+  const payload = {
+    taskId: state.lastTaskId || newUUID(),
+    contextId: state.contextId,
+    status: { 
+      state: 'completed',
+      message: {
+        parts: [{ text: 'Calculation completed successfully!' }]
+      }
+    },
+    timestamp: new Date().toISOString(),
+  };
+  
+  displayPushNotification(payload);
+  addLog('TEST', '🧪 Simulated push notification displayed');
 }
 
 // ══════════════════════════════════════════════
@@ -1896,6 +2230,7 @@ function autoResize(el) {
 function newContext() {
   state.contextId = newUUID();
   document.getElementById('contextId').value = state.contextId;
+  document.getElementById('pushContextId').value = state.contextId;  // Auto-fill push context ID
   addLog('INFO', `New context ID: ${state.contextId}`);
 }
 
@@ -1927,6 +2262,8 @@ function errorBox(msg) {
 // INIT
 // ══════════════════════════════════════════════
 document.getElementById('contextId').value = state.contextId;
+document.getElementById('pushContextId').value = state.contextId;  // Initialize push context ID
+updateCurrentContextId(state.contextId);  // Initialize chat page context ID display
 addLog('INFO', 'A2A Test Console ready. Set Agent URL and click Connect.');
 </script>
 </body>

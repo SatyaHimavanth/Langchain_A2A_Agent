@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
@@ -17,6 +18,7 @@ from a2a.utils import (
 from a2a.utils.errors import ServerError
 
 from agent import CalculatorAgent
+from push_notifications import PushNotificationManager
 
 
 logging.basicConfig(
@@ -31,9 +33,10 @@ logger = logging.getLogger(__name__)
 class CalculatorAgentExecutor(AgentExecutor):
     """Decoder Rule Assistant AgentExecutor."""
 
-    def __init__(self):
+    def __init__(self, push_notification_manager: Optional[PushNotificationManager] = None):
         self.basic_agent = CalculatorAgent()
         self.advanced_agent = CalculatorAgent(enable_advanced_tools=True)
+        self.push_notification_manager = push_notification_manager
 
     async def execute(
         self,
@@ -78,6 +81,14 @@ class CalculatorAgentExecutor(AgentExecutor):
                             task.id,
                         ),
                     )
+                    # Send push notification for working state
+                    if self.push_notification_manager:
+                        await self.push_notification_manager.send_task_update(
+                            task.id,
+                            task.context_id,
+                            'working',
+                            message=item['content'],
+                        )
                 elif response_status == 'error':
                     await updater.update_status(
                         TaskState.failed,
@@ -88,6 +99,14 @@ class CalculatorAgentExecutor(AgentExecutor):
                         ),
                         final=True,
                     )
+                    # Send push notification for failed state
+                    if self.push_notification_manager:
+                        await self.push_notification_manager.send_task_update(
+                            task.id,
+                            task.context_id,
+                            'failed',
+                            message=item['content'],
+                        )
                     terminal_emitted = True
                     break
                 elif require_user_input:
@@ -100,6 +119,14 @@ class CalculatorAgentExecutor(AgentExecutor):
                         ),
                         final=True,
                     )
+                    # Send push notification for input_required state
+                    if self.push_notification_manager:
+                        await self.push_notification_manager.send_task_update(
+                            task.id,
+                            task.context_id,
+                            'input_required',
+                            message=item['content'],
+                        )
                     terminal_emitted = True
                     break
                 else:
@@ -108,31 +135,64 @@ class CalculatorAgentExecutor(AgentExecutor):
                         name='conversion_result',
                     )
                     await updater.complete()
+                    # Send push notification for completed state
+                    if self.push_notification_manager:
+                        artifacts = [
+                            {
+                                'parts': [{'text': item['content']}],
+                                'name': 'conversion_result',
+                            }
+                        ]
+                        await self.push_notification_manager.send_task_update(
+                            task.id,
+                            task.context_id,
+                            'completed',
+                            message=item['content'],
+                            artifacts=artifacts,
+                        )
                     terminal_emitted = True
                     break
 
             if not terminal_emitted:
+                error_msg = 'The request did not produce a terminal response.'
                 await updater.update_status(
                     TaskState.failed,
                     new_agent_text_message(
-                        'The request did not produce a terminal response.',
+                        error_msg,
                         task.context_id,
                         task.id,
                     ),
                     final=True,
                 )
+                # Send push notification for failed state
+                if self.push_notification_manager:
+                    await self.push_notification_manager.send_task_update(
+                        task.id,
+                        task.context_id,
+                        'failed',
+                        message=error_msg,
+                    )
 
         except Exception as e:
+            error_msg = 'An internal error occurred while processing your request.'
             logger.error(f'An error occurred while streaming the response: {e}')
             await updater.update_status(
                 TaskState.failed,
                 new_agent_text_message(
-                    'An internal error occurred while processing your request.',
+                    error_msg,
                     task.context_id,
                     task.id,
                 ),
                 final=True,
             )
+            # Send push notification for failed state
+            if self.push_notification_manager:
+                await self.push_notification_manager.send_task_update(
+                    task.id,
+                    task.context_id,
+                    'failed',
+                    message=f'{error_msg} {str(e)}',
+                )
 
     def _validate_request(self, context: RequestContext) -> bool:
         return False

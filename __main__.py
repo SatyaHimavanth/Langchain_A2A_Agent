@@ -1,6 +1,8 @@
 import logging
 import os
 import sys
+from collections import defaultdict
+from datetime import datetime
 
 import click
 import httpx
@@ -14,11 +16,14 @@ from a2a.server.tasks import (
 )
 from a2a.types import AgentCapabilities, AgentCard, AgentSkill, HTTPAuthSecurityScheme
 from starlette.middleware.cors import CORSMiddleware
+from starlette.responses import JSONResponse
+from starlette.routing import Route
 from dotenv import load_dotenv
 
 from agent import CalculatorAgent
 from agent_executor import CalculatorAgentExecutor
 from auth import BearerTokenCallContextBuilder
+from push_notifications import PushNotificationManager, PushNotificationRouter
 
 
 load_dotenv()
@@ -31,6 +36,66 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+
+# Global store for received push notifications (for display in test client)
+push_notifications_store = defaultdict(list)  # key: context_id, value: list of notifications
+
+
+async def handle_push_notification(request):
+    """Handle incoming push notifications from agent."""
+    try:
+        data = await request.json()
+        context_id = data.get('contextId', 'unknown')
+        
+        # Store notification with timestamp
+        notification = {
+            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            **data
+        }
+        push_notifications_store[context_id].append(notification)
+        
+        # Keep only last 50 notifications per context
+        if len(push_notifications_store[context_id]) > 50:
+            push_notifications_store[context_id] = push_notifications_store[context_id][-50:]
+        
+        logger.info(f"Received push notification for context {context_id}: {data.get('status', {}).get('state', '?')}")
+        
+        return JSONResponse({'ok': True, 'message': 'Notification received'})
+    except Exception as e:
+        logger.error(f"Error handling push notification: {str(e)}")
+        return JSONResponse({'ok': False, 'error': str(e)}, status_code=400)
+
+
+async def handle_get_notifications(request):
+    """Get push notifications for a context."""
+    try:
+        context_id = request.query_params.get('contextId', '')
+        if not context_id:
+            return JSONResponse({'ok': False, 'error': 'contextId required'}, status_code=400)
+        
+        notifications = push_notifications_store.get(context_id, [])
+        return JSONResponse({
+            'ok': True,
+            'contextId': context_id,
+            'notifications': notifications,
+            'count': len(notifications)
+        })
+    except Exception as e:
+        logger.error(f"Error getting notifications: {str(e)}")
+        return JSONResponse({'ok': False, 'error': str(e)}, status_code=400)
+
+
+async def handle_clear_notifications(request):
+    """Clear notifications for a context."""
+    try:
+        context_id = request.query_params.get('contextId', '')
+        if context_id in push_notifications_store:
+            del push_notifications_store[context_id]
+        return JSONResponse({'ok': True, 'message': 'Notifications cleared'})
+    except Exception as e:
+        logger.error(f"Error clearing notifications: {str(e)}")
+        return JSONResponse({'ok': False, 'error': str(e)}, status_code=400)
 
 
 class MissingAPIKeyError(Exception):
@@ -139,8 +204,14 @@ def main(host, port, timeout, agent_url):
             config_store=push_config_store,
         )
 
+        # Initialize push notification manager
+        push_notification_manager = PushNotificationManager(http_client=httpx_client)
+        
+        # Create push notification router
+        push_notification_router = PushNotificationRouter(push_notification_manager)
+
         request_handler = DefaultRequestHandler(
-            agent_executor=CalculatorAgentExecutor(),
+            agent_executor=CalculatorAgentExecutor(push_notification_manager=push_notification_manager),
             task_store=InMemoryTaskStore(),
             push_config_store=push_config_store,
             push_sender=push_sender,
@@ -155,6 +226,62 @@ def main(host, port, timeout, agent_url):
         )
 
         app = server.build()
+        
+        # Add push notification receiver routes
+        from starlette.routing import Mount, Route
+        routes = app.routes
+        # Add routes for receiving and retrieving push notifications
+        app.routes.append(Route('/push', handle_push_notification, methods=['POST']))
+        app.routes.append(Route('/push/notifications', handle_get_notifications, methods=['GET']))
+        app.routes.append(Route('/push/clear', handle_clear_notifications, methods=['POST']))
+        
+        # Add Push Notification Route Handler Middleware
+        from starlette.middleware.base import BaseHTTPMiddleware
+        from starlette.requests import Request
+        from starlette.responses import JSONResponse
+        
+        class PushNotificationMiddleware(BaseHTTPMiddleware):
+            async def dispatch(self, request: Request, call_next):
+                # Only intercept POST requests to root path
+                if request.method == 'POST' and request.url.path == '/':
+                    try:
+                        body = await request.body()
+                        if body:
+                            import json
+                            data = json.loads(body)
+                            method = data.get('method', '')
+                            
+                            # Check if this is a push notification request
+                            if method.startswith('tasks/pushNotificationConfig/'):
+                                try:
+                                    result = await push_notification_router.handle_request(
+                                        method,
+                                        data.get('params', {})
+                                    )
+                                    return JSONResponse({
+                                        'jsonrpc': '2.0',
+                                        'id': data.get('id'),
+                                        'result': result,
+                                    })
+                                except Exception as e:
+                                    logger.error(f"Error handling push notification request: {str(e)}")
+                                    return JSONResponse({
+                                        'jsonrpc': '2.0',
+                                        'id': data.get('id'),
+                                        'error': {
+                                            'code': -32603,
+                                            'message': 'Internal error',
+                                            'data': str(e),
+                                        }
+                                    }, status_code=400)
+                    except Exception as e:
+                        logger.debug(f"Failed to parse request body for middleware: {str(e)}")
+                
+                # Let other requests pass through
+                return await call_next(request)
+        
+        # Add middleware in correct order (push notification before CORS)
+        app.add_middleware(PushNotificationMiddleware)
         
         # Add CORS middleware to allow all origins
         app.add_middleware(

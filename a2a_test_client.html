@@ -1,0 +1,1933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>A2A Agent Test Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0a0c10;
+    --surface:   #0f1117;
+    --panel:     #13161e;
+    --border:    #1e2330;
+    --border2:   #252c3a;
+    --accent:    #00e5ff;
+    --accent2:   #7b61ff;
+    --green:     #00ff9d;
+    --yellow:    #ffd166;
+    --red:       #ff4757;
+    --text:      #c8d6ea;
+    --text-muted:#556070;
+    --text-dim:  #394555;
+    --mono:      'JetBrains Mono', monospace;
+    --display:   'Syne', sans-serif;
+    --radius:    6px;
+    --glow:      0 0 20px rgba(0,229,255,0.15);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--mono);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Noise overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.5;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    border-bottom: 1px solid var(--border);
+    padding: 18px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(10,12,16,0.9);
+    backdrop-filter: blur(12px);
+  }
+
+  .logo {
+    font-family: var(--display);
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-badge {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #000;
+    font-size: 10px;
+    font-family: var(--mono);
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 3px;
+    letter-spacing: 1px;
+  }
+
+  .conn-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .conn-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: background 0.3s;
+  }
+
+  .conn-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .conn-dot.error  { background: var(--red);   box-shadow: 0 0 6px var(--red); }
+
+  /* ── LAYOUT ── */
+  .workspace {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    height: calc(100vh - 57px);
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    background: var(--surface);
+  }
+
+  .sidebar-section {
+    padding: 20px 16px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+  }
+
+  .input-group { margin-bottom: 10px; }
+
+  .input-label {
+    display: block;
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+    letter-spacing: 0.5px;
+  }
+
+  input[type="text"], input[type="password"], textarea, select {
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 8px 10px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    resize: none;
+  }
+
+  input[type="text"]:focus, input[type="password"]:focus,
+  textarea:focus, select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(0,229,255,0.1);
+  }
+
+  select { cursor: pointer; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: var(--radius);
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+  }
+  .btn-primary:hover { background: #33eaff; box-shadow: var(--glow); }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border2);
+  }
+  .btn-ghost:hover { border-color: var(--border2); color: var(--text); background: var(--panel); }
+
+  .btn-danger {
+    background: transparent;
+    color: var(--red);
+    border: 1px solid rgba(255,71,87,0.3);
+  }
+  .btn-danger:hover { background: rgba(255,71,87,0.1); }
+
+  .btn-purple {
+    background: var(--accent2);
+    color: #fff;
+  }
+  .btn-purple:hover { background: #9580ff; box-shadow: 0 0 20px rgba(123,97,255,0.3); }
+
+  .btn-sm { font-size: 10px; padding: 5px 10px; }
+  .btn-block { width: 100%; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .nav-tabs {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 12px 10px;
+  }
+
+  .nav-tab {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 9px 12px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--text-muted);
+    border: none;
+    background: transparent;
+    width: 100%;
+    text-align: left;
+    transition: all 0.15s;
+    font-family: var(--mono);
+  }
+
+  .nav-tab:hover { color: var(--text); background: var(--panel); }
+  .nav-tab.active {
+    color: var(--accent);
+    background: rgba(0,229,255,0.07);
+    border-left: 2px solid var(--accent);
+    padding-left: 10px;
+  }
+
+  .nav-tab .tab-icon { font-size: 14px; width: 18px; }
+  .nav-tab .tab-badge {
+    margin-left: auto;
+    font-size: 9px;
+    background: var(--border2);
+    padding: 1px 6px;
+    border-radius: 10px;
+    color: var(--text-muted);
+  }
+  .nav-tab.active .tab-badge { background: rgba(0,229,255,0.15); color: var(--accent); }
+
+  /* ── MAIN CONTENT ── */
+  .main {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .tab-panel {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+  }
+  .tab-panel.active { display: flex; }
+
+  .panel-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  .panel-title {
+    font-family: var(--display);
+    font-size: 15px;
+    font-weight: 700;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .panel-title .icon { font-size: 17px; }
+
+  .panel-subtitle {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  .panel-actions { display: flex; gap: 8px; }
+
+  /* ── AGENT CARD PANEL ── */
+  .card-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding: 20px 24px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .agent-card-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .agent-card-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .card-type-badge {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 3px;
+  }
+
+  .badge-public  { background: rgba(0,255,157,0.12); color: var(--green);  border: 1px solid rgba(0,255,157,0.25); }
+  .badge-extended{ background: rgba(123,97,255,0.12); color: var(--accent2); border: 1px solid rgba(123,97,255,0.25); }
+  .badge-info    { background: rgba(0,229,255,0.1);  color: var(--accent);  border: 1px solid rgba(0,229,255,0.2); }
+  .badge-warn    { background: rgba(255,209,102,0.1); color: var(--yellow); border: 1px solid rgba(255,209,102,0.25); }
+  .badge-error   { background: rgba(255,71,87,0.1);  color: var(--red);    border: 1px solid rgba(255,71,87,0.25); }
+
+  .card-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 16px;
+  }
+
+  .json-viewer {
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: #8fa3b8;
+    background: var(--panel);
+    border-radius: var(--radius);
+    padding: 12px;
+    max-height: 340px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+  }
+
+  .json-viewer .key   { color: #7ec8e3; }
+  .json-viewer .str   { color: #98e4b0; }
+  .json-viewer .num   { color: #ffd166; }
+  .json-viewer .bool  { color: #ff9f7f; }
+  .json-viewer .null  { color: var(--text-muted); }
+
+  .skills-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+
+  .skill-item {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+  }
+
+  .skill-name { font-size: 12px; font-weight: 600; color: var(--accent); margin-bottom: 3px; }
+  .skill-desc { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
+
+  .tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .tag {
+    font-size: 9px;
+    padding: 2px 7px;
+    background: var(--border2);
+    border-radius: 3px;
+    color: var(--text-muted);
+  }
+
+  .info-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 11px; }
+  .info-key { color: var(--text-muted); }
+  .info-val { color: var(--text); word-break: break-all; }
+
+  .cap-pills { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .cap-pill {
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border2);
+    color: var(--text-muted);
+  }
+  .cap-pill.on { background: rgba(0,255,157,0.08); color: var(--green); border-color: rgba(0,255,157,0.25); }
+
+  /* ── CHAT PANEL ── */
+  .chat-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .chat-empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-dim);
+    gap: 8px;
+    font-size: 12px;
+  }
+
+  .chat-empty .empty-icon { font-size: 36px; margin-bottom: 4px; }
+
+  .msg {
+    display: flex;
+    gap: 10px;
+    animation: fadeUp 0.2s ease;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .msg-avatar {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .msg.user .msg-avatar   { background: rgba(0,229,255,0.15); border: 1px solid rgba(0,229,255,0.3); }
+  .msg.agent .msg-avatar  { background: rgba(123,97,255,0.15); border: 1px solid rgba(123,97,255,0.3); }
+  .msg.system .msg-avatar { background: rgba(255,209,102,0.1); border: 1px solid rgba(255,209,102,0.2); }
+  .msg.error .msg-avatar  { background: rgba(255,71,87,0.1);  border: 1px solid rgba(255,71,87,0.2); }
+
+  .msg-body { flex: 1; min-width: 0; }
+  .msg-role { font-size: 10px; color: var(--text-muted); margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+  .msg-role .ts { color: var(--text-dim); }
+
+  .msg-text {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .msg.user .msg-text   { border-color: rgba(0,229,255,0.2); background: rgba(0,229,255,0.04); }
+  .msg.system .msg-text { border-color: rgba(255,209,102,0.2); background: rgba(255,209,102,0.03); font-size: 11px; color: var(--yellow); }
+  .msg.error .msg-text  { border-color: rgba(255,71,87,0.2); background: rgba(255,71,87,0.04); color: var(--red); font-size: 11px; }
+
+  .streaming-indicator {
+    display: inline-flex;
+    gap: 3px;
+    align-items: center;
+    padding: 2px 0;
+  }
+
+  .streaming-indicator span {
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: blink 1.2s infinite;
+  }
+  .streaming-indicator span:nth-child(2) { animation-delay: 0.2s; }
+  .streaming-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes blink {
+    0%, 80%, 100% { opacity: 0.2; }
+    40% { opacity: 1; }
+  }
+
+  .task-meta {
+    margin-top: 6px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .task-pill {
+    font-size: 9px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  .status-working    { background: rgba(0,229,255,0.1);  color: var(--accent);  border: 1px solid rgba(0,229,255,0.2); }
+  .status-completed  { background: rgba(0,255,157,0.1);  color: var(--green);   border: 1px solid rgba(0,255,157,0.2); }
+  .status-failed     { background: rgba(255,71,87,0.1);  color: var(--red);     border: 1px solid rgba(255,71,87,0.2); }
+  .status-cancelled  { background: rgba(255,209,102,0.1);color: var(--yellow);  border: 1px solid rgba(255,209,102,0.2); }
+  .status-submitted  { background: rgba(123,97,255,0.1); color: var(--accent2); border: 1px solid rgba(123,97,255,0.2); }
+  .status-unknown    { background: var(--border2); color: var(--text-muted); border: 1px solid var(--border); }
+
+  .chat-input-area {
+    border-top: 1px solid var(--border);
+    padding: 14px 24px;
+    flex-shrink: 0;
+  }
+
+  .chat-options {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 10px;
+    font-size: 11px;
+  }
+
+  .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    cursor: pointer;
+    color: var(--text-muted);
+    user-select: none;
+  }
+
+  .toggle-label input { display: none; }
+
+  .toggle {
+    width: 32px; height: 16px;
+    background: var(--border2);
+    border-radius: 8px;
+    position: relative;
+    transition: background 0.2s;
+  }
+
+  .toggle::after {
+    content: '';
+    position: absolute;
+    left: 2px; top: 2px;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: all 0.2s;
+  }
+
+  .toggle-label input:checked + .toggle { background: var(--accent); }
+  .toggle-label input:checked + .toggle::after { left: 18px; background: #000; }
+  .toggle-label input:checked ~ span { color: var(--accent); }
+
+  .input-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+  }
+
+  .input-row textarea {
+    flex: 1;
+    min-height: 42px;
+    max-height: 120px;
+    line-height: 1.5;
+    font-size: 13px;
+    padding: 10px 12px;
+  }
+
+  /* ── TASK PANEL ── */
+  .task-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .task-lookup {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+
+  .section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .input-row-inline { display: flex; gap: 8px; align-items: center; }
+  .input-row-inline input { flex: 1; }
+
+  .task-result {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+    font-size: 11px;
+    margin-top: 12px;
+  }
+
+  .task-result .tr-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+  }
+
+  .task-history-list {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .task-history-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .task-history-item:last-child { border-bottom: none; }
+  .task-history-item:hover { background: var(--panel); }
+
+  .thi-id { font-size: 11px; color: var(--text-muted); flex: 1; font-family: var(--mono); word-break: break-all; }
+  .thi-status { flex-shrink: 0; }
+
+  /* ── PUSH NOTIFICATIONS ── */
+  .push-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .push-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+
+  .push-log {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+    font-size: 11px;
+    min-height: 120px;
+    max-height: 240px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .push-log-entry { display: flex; gap: 8px; }
+  .push-log-entry .ple-time { color: var(--text-dim); flex-shrink: 0; }
+  .push-log-entry .ple-text { color: var(--text-muted); }
+  .push-log-entry .ple-text.ok  { color: var(--green); }
+  .push-log-entry .ple-text.err { color: var(--red); }
+  .push-log-entry .ple-text.info { color: var(--accent); }
+
+  /* ── RAW REQUEST DRAWER ── */
+  .raw-drawer {
+    border-top: 1px solid var(--border);
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s ease;
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  .raw-drawer.open { max-height: 280px; }
+
+  .raw-inner {
+    padding: 12px 24px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    height: 100%;
+  }
+
+  .raw-block { display: flex; flex-direction: column; gap: 6px; }
+  .raw-block-label {
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .raw-block pre {
+    flex: 1;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: #8fa3b8;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px;
+    overflow-y: auto;
+    max-height: 200px;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  /* ── LOG PANEL ── */
+  .log-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .log-entry {
+    display: flex;
+    gap: 10px;
+    font-size: 11px;
+    line-height: 1.5;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(30,35,48,0.5);
+    animation: fadeUp 0.15s ease;
+  }
+
+  .log-ts { color: var(--text-dim); flex-shrink: 0; }
+  .log-level {
+    font-weight: 700;
+    width: 48px;
+    flex-shrink: 0;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+  }
+  .log-level.INFO  { color: var(--accent); }
+  .log-level.SEND  { color: var(--accent2); }
+  .log-level.RECV  { color: var(--green); }
+  .log-level.WARN  { color: var(--yellow); }
+  .log-level.ERROR { color: var(--red); }
+  .log-level.SSE   { color: #ff9f7f; }
+  .log-msg { color: var(--text-muted); flex: 1; word-break: break-word; }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+  /* ── DIVIDER ── */
+  .divider { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+
+  /* ── UTILS ── */
+  .flex-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .mt8 { margin-top: 8px; }
+  .mt12 { margin-top: 12px; }
+  .text-xs { font-size: 10px; }
+  .text-muted { color: var(--text-muted); }
+  .copy-btn { font-size: 10px; cursor: pointer; color: var(--text-dim); background: none; border: none; font-family: var(--mono); padding: 0; }
+  .copy-btn:hover { color: var(--accent); }
+
+  /* Highlight keywords in JSON */
+  .hljs-key    { color: #7ec8e3; }
+  .hljs-string { color: #98e4b0; }
+  .hljs-number { color: #ffd166; }
+  .hljs-bool   { color: #ff9f7f; }
+  .hljs-null   { color: #667788; }
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ── -->
+<header class="header">
+  <div class="logo">
+    <span>A2A</span>
+    <span class="logo-badge">TEST CONSOLE</span>
+  </div>
+  <div class="conn-status">
+    <div class="conn-dot" id="connDot"></div>
+    <span id="connLabel">not connected</span>
+  </div>
+</header>
+
+<!-- ── WORKSPACE ── -->
+<div class="workspace">
+
+  <!-- ── SIDEBAR ── -->
+  <aside class="sidebar">
+
+    <!-- Connection Config -->
+    <div class="sidebar-section">
+      <div class="sidebar-label">Connection</div>
+      <div class="input-group">
+        <label class="input-label">Agent URL</label>
+        <input type="text" id="agentUrl" value="http://localhost:10000" placeholder="http://localhost:10000" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Auth Token (Bearer)</label>
+        <input type="password" id="authToken" placeholder="optional — for extended card" />
+      </div>
+      <button class="btn btn-primary btn-block" onclick="connectAgent()">⚡ Connect</button>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="nav-tabs">
+      <div class="sidebar-label" style="padding: 12px 2px 0; font-size: 9px;">FEATURES</div>
+      <button class="nav-tab active" data-tab="cards" onclick="switchTab('cards')">
+        <span class="tab-icon">🪪</span> Agent Cards
+        <span class="tab-badge" id="badge-cards">–</span>
+      </button>
+      <button class="nav-tab" data-tab="chat" onclick="switchTab('chat')">
+        <span class="tab-icon">💬</span> Chat / Stream
+        <span class="tab-badge" id="badge-chat">–</span>
+      </button>
+      <button class="nav-tab" data-tab="tasks" onclick="switchTab('tasks')">
+        <span class="tab-icon">📋</span> Task Inspector
+        <span class="tab-badge" id="badge-tasks">0</span>
+      </button>
+      <button class="nav-tab" data-tab="push" onclick="switchTab('push')">
+        <span class="tab-icon">🔔</span> Push Notify
+        <span class="tab-badge" id="badge-push">–</span>
+      </button>
+      <button class="nav-tab" data-tab="logs" onclick="switchTab('logs')">
+        <span class="tab-icon">📡</span> Request Log
+        <span class="tab-badge" id="badge-logs">0</span>
+      </button>
+    </nav>
+
+    <!-- Context -->
+    <div class="sidebar-section" style="margin-top:auto;">
+      <div class="sidebar-label">Session</div>
+      <div class="input-group">
+        <label class="input-label">Context ID</label>
+        <input type="text" id="contextId" readonly style="cursor:pointer;font-size:10px;" />
+      </div>
+      <div class="flex-row">
+        <button class="btn btn-ghost btn-sm" onclick="newContext()" style="flex:1;">New Context</button>
+        <button class="btn btn-ghost btn-sm" onclick="copyContextId()">Copy</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── MAIN ── -->
+  <main class="main">
+
+    <!-- ═══ TAB: AGENT CARDS ═══ -->
+    <div class="tab-panel active" id="tab-cards">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title"><span class="icon">🪪</span> Agent Cards</div>
+          <div class="panel-subtitle">Public card from <code>/.well-known/agent-card.json</code> · Extended via JSON-RPC</div>
+        </div>
+        <div class="panel-actions">
+          <button class="btn btn-ghost btn-sm" onclick="fetchPublicCard()">Fetch Public</button>
+          <button class="btn btn-purple btn-sm" onclick="fetchExtendedCard()">Fetch Extended 🔐</button>
+        </div>
+      </div>
+
+      <div class="card-grid">
+        <!-- Public Card -->
+        <div class="agent-card-box">
+          <div class="agent-card-header">
+            <div style="font-size:12px;font-weight:600;">Public Agent Card</div>
+            <span class="card-type-badge badge-public">PUBLIC</span>
+          </div>
+          <div class="card-content" id="publicCardContent">
+            <div style="color:var(--text-dim);font-size:11px;padding:20px 0;text-align:center;">
+              Click "Fetch Public" to load the public agent card
+            </div>
+          </div>
+        </div>
+
+        <!-- Extended Card -->
+        <div class="agent-card-box">
+          <div class="agent-card-header">
+            <div style="font-size:12px;font-weight:600;">Extended Agent Card</div>
+            <span class="card-type-badge badge-extended">AUTHENTICATED</span>
+          </div>
+          <div class="card-content" id="extCardContent">
+            <div style="color:var(--text-dim);font-size:11px;padding:20px 0;text-align:center;">
+              Set a Bearer token and click "Fetch Extended" to unlock extended capabilities
+            </div>
+          </div>
+        </div>
+
+        <!-- Diff / Capabilities -->
+        <div class="agent-card-box" style="grid-column: span 2;">
+          <div class="agent-card-header">
+            <div style="font-size:12px;font-weight:600;">Capabilities & Security Schemes</div>
+            <span class="card-type-badge badge-info">PARSED</span>
+          </div>
+          <div class="card-content" id="capabilitiesContent">
+            <div style="color:var(--text-dim);font-size:11px;text-align:center;padding:16px 0;">
+              Fetch a card to inspect capabilities
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ TAB: CHAT / STREAMING ═══ -->
+    <div class="tab-panel" id="tab-chat">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title"><span class="icon">💬</span> Chat / Streaming</div>
+          <div class="panel-subtitle">
+            <span id="modeIndicator">–</span> · task ID: <span id="currentTaskId" style="color:var(--accent);">none</span>
+          </div>
+        </div>
+        <div class="panel-actions">
+          <button class="btn btn-ghost btn-sm" onclick="toggleRawDrawer()">Raw I/O</button>
+          <button class="btn btn-danger btn-sm" onclick="clearChat()">Clear</button>
+        </div>
+      </div>
+
+      <div class="chat-container">
+        <div class="chat-messages" id="chatMessages">
+          <div class="chat-empty">
+            <div class="empty-icon">⚡</div>
+            <div>Connect and start a conversation</div>
+            <div style="font-size:10px;color:var(--text-dim);">message/send or message/stream</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Raw I/O Drawer -->
+      <div class="raw-drawer" id="rawDrawer">
+        <div class="raw-inner">
+          <div class="raw-block">
+            <div class="raw-block-label">Last Request →</div>
+            <pre id="rawReq">–</pre>
+          </div>
+          <div class="raw-block">
+            <div class="raw-block-label">Last Response ←</div>
+            <pre id="rawRes">–</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Input -->
+      <div class="chat-input-area">
+        <div class="chat-options">
+          <label class="toggle-label">
+            <input type="checkbox" id="streamToggle" checked>
+            <span class="toggle"></span>
+            <span>Streaming (SSE)</span>
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" id="authToggle" checked>
+            <span class="toggle"></span>
+            <span>Use Auth Token</span>
+          </label>
+        </div>
+        <div class="input-row">
+          <textarea id="chatInput" placeholder="Type a message… e.g. What is 2+3*5" rows="1"
+            onkeydown="handleChatKey(event)" oninput="autoResize(this)"></textarea>
+          <button class="btn btn-primary" id="sendBtn" onclick="sendMessage()">Send →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ TAB: TASK INSPECTOR ═══ -->
+    <div class="tab-panel" id="tab-tasks">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title"><span class="icon">📋</span> Task Inspector</div>
+          <div class="panel-subtitle">Query and manage tasks by ID · tasks/get · tasks/cancel</div>
+        </div>
+      </div>
+
+      <div class="task-panel-body">
+
+        <!-- Lookup -->
+        <div class="task-lookup">
+          <div class="section-title">🔍 Lookup Task</div>
+          <div class="input-row-inline">
+            <input type="text" id="taskIdInput" placeholder="Paste task ID…" />
+            <button class="btn btn-primary btn-sm" onclick="getTask()">Get Task</button>
+            <button class="btn btn-danger btn-sm" onclick="cancelTask()">Cancel</button>
+          </div>
+          <div id="taskResult"></div>
+        </div>
+
+        <!-- History -->
+        <div>
+          <div class="section-title">📂 Session Task History</div>
+          <div class="task-history-list" id="taskHistory">
+            <div style="padding:20px;text-align:center;color:var(--text-dim);font-size:11px;">
+              No tasks yet — send a message to see tasks here
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ═══ TAB: PUSH NOTIFICATIONS ═══ -->
+    <div class="tab-panel" id="tab-push">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title"><span class="icon">🔔</span> Push Notifications</div>
+          <div class="panel-subtitle">Configure webhook · tasks/pushNotificationConfig/set · /get</div>
+        </div>
+      </div>
+
+      <div class="push-body">
+
+        <!-- Set Config -->
+        <div class="push-box">
+          <div class="section-title">⚙️ Configure Push Webhook</div>
+          <div class="input-group">
+            <label class="input-label">Task ID (for notification subscription)</label>
+            <input type="text" id="pushTaskId" placeholder="Task ID to subscribe notifications for" />
+          </div>
+          <div class="input-group">
+            <label class="input-label">Webhook URL (your endpoint to receive push events)</label>
+            <input type="text" id="pushUrl" value="http://localhost:9000/push" placeholder="https://yourserver.com/webhook" />
+          </div>
+          <div class="input-group">
+            <label class="input-label">Push Auth Token (optional — sent to your webhook)</label>
+            <input type="text" id="pushAuthToken" placeholder="optional bearer token for your webhook" />
+          </div>
+          <div class="flex-row mt8">
+            <button class="btn btn-primary btn-sm" onclick="setPushConfig()">Set Config</button>
+            <button class="btn btn-ghost btn-sm" onclick="getPushConfig()">Get Current Config</button>
+          </div>
+        </div>
+
+        <!-- Mock Webhook Listener -->
+        <div class="push-box">
+          <div class="section-title">📥 Simulated Webhook Log</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">
+            Since browsers can't host a real server, this simulates what push payloads
+            would look like. Click "Simulate Push Event" to see an example payload.
+          </div>
+          <div class="push-log" id="pushLog">
+            <div class="push-log-entry">
+              <span class="ple-time">--:--:--</span>
+              <span class="ple-text">Waiting for push notification events…</span>
+            </div>
+          </div>
+          <div class="flex-row mt8">
+            <button class="btn btn-ghost btn-sm" onclick="simulatePushEvent()">Simulate Push Event</button>
+            <button class="btn btn-ghost btn-sm" onclick="clearPushLog()">Clear Log</button>
+          </div>
+        </div>
+
+        <!-- Push Config Result -->
+        <div class="push-box" id="pushConfigResult" style="display:none;">
+          <div class="section-title">📄 Push Config Response</div>
+          <pre class="json-viewer" id="pushConfigJson"></pre>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ═══ TAB: LOGS ═══ -->
+    <div class="tab-panel" id="tab-logs">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title"><span class="icon">📡</span> Request Log</div>
+          <div class="panel-subtitle">Full JSON-RPC request / response trace</div>
+        </div>
+        <div class="panel-actions">
+          <button class="btn btn-ghost btn-sm" onclick="clearLogs()">Clear</button>
+          <button class="btn btn-ghost btn-sm" onclick="exportLogs()">Export</button>
+        </div>
+      </div>
+      <div class="log-body" id="logBody">
+        <div style="color:var(--text-dim);font-size:11px;padding:12px 0;">No logs yet</div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+const state = {
+  agentUrl: 'http://localhost:10000',
+  authToken: '',
+  contextId: newUUID(),
+  connected: false,
+  taskHistory: [],
+  logCount: 0,
+  streaming: null,
+};
+
+let publicCard = null;
+let extendedCard = null;
+
+// ══════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════
+function newUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
+function ts() {
+  return new Date().toLocaleTimeString('en-US', { hour12: false });
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function syntaxHighlightJson(json) {
+  if (typeof json !== 'string') json = JSON.stringify(json, null, 2);
+  return escapeHtml(json).replace(
+    /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(?:\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+    match => {
+      let cls = 'hljs-number';
+      if (/^"/.test(match)) {
+        cls = /:$/.test(match) ? 'hljs-key' : 'hljs-string';
+      } else if (/true|false/.test(match)) {
+        cls = 'hljs-bool';
+      } else if (/null/.test(match)) {
+        cls = 'hljs-null';
+      }
+      return `<span class="${cls}">${match}</span>`;
+    }
+  );
+}
+
+function readInputs() {
+  state.agentUrl = document.getElementById('agentUrl').value.trim().replace(/\/$/, '');
+  state.authToken = document.getElementById('authToken').value.trim();
+}
+
+function buildHeaders(useAuth = true) {
+  const h = { 'Content-Type': 'application/json' };
+  if (useAuth && state.authToken) {
+    h['Authorization'] = `Bearer ${state.authToken}`;
+  }
+  return h;
+}
+
+function buildJsonRpc(method, params) {
+  return {
+    jsonrpc: '2.0',
+    id: newUUID(),
+    method,
+    params,
+  };
+}
+
+// ══════════════════════════════════════════════
+// LOGGING
+// ══════════════════════════════════════════════
+function addLog(level, msg) {
+  const body = document.getElementById('logBody');
+  if (state.logCount === 0) body.innerHTML = '';
+  state.logCount++;
+
+  const el = document.createElement('div');
+  el.className = 'log-entry';
+  el.innerHTML = `
+    <span class="log-ts">${ts()}</span>
+    <span class="log-level ${level}">${level}</span>
+    <span class="log-msg">${escapeHtml(msg)}</span>
+  `;
+  body.appendChild(el);
+  body.scrollTop = body.scrollHeight;
+
+  document.getElementById('badge-logs').textContent = state.logCount;
+}
+
+// ══════════════════════════════════════════════
+// CONNECTION / AGENT CARD
+// ══════════════════════════════════════════════
+async function connectAgent() {
+  readInputs();
+  setConnStatus('loading', 'connecting…');
+  addLog('INFO', `Connecting to ${state.agentUrl}`);
+  await fetchPublicCard();
+}
+
+async function fetchPublicCard() {
+  readInputs();
+  const url = `${state.agentUrl}/.well-known/agent-card.json`;
+  addLog('SEND', `GET ${url}`);
+  try {
+    const res = await fetch(url, { headers: buildHeaders(false) });
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+    publicCard = await res.json();
+    addLog('RECV', `Public card OK — ${publicCard.name} v${publicCard.version}`);
+    renderPublicCard(publicCard);
+    renderCapabilities(publicCard, null);
+    setConnStatus('online', `${publicCard.name}`);
+    state.connected = true;
+    document.getElementById('badge-cards').textContent = 'OK';
+  } catch (e) {
+    addLog('ERROR', `Public card fetch failed: ${e.message}`);
+    document.getElementById('publicCardContent').innerHTML = errorBox(e.message);
+    setConnStatus('error', 'connection failed');
+    document.getElementById('badge-cards').textContent = 'ERR';
+  }
+}
+
+async function fetchExtendedCard() {
+  readInputs();
+  if (!publicCard) {
+    await fetchPublicCard();
+    if (!publicCard) return;
+  }
+  if (!state.authToken) {
+    addLog('WARN', 'No auth token set — extended card may be identical to public card');
+  }
+  const body = buildJsonRpc('agent/authenticatedExtendedCard', {});
+  addLog('SEND', `POST / agent/authenticatedExtendedCard`);
+  document.getElementById('rawReq').textContent = JSON.stringify(body, null, 2);
+  try {
+    const useAuth = document.getElementById('authToggle').checked;
+    const res = await fetch(`${state.agentUrl}/`, {
+      method: 'POST',
+      headers: buildHeaders(useAuth),
+      body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    document.getElementById('rawRes').textContent = JSON.stringify(json, null, 2);
+    if (json.error) throw new Error(json.error.message || JSON.stringify(json.error));
+    extendedCard = json.result;
+    addLog('RECV', `Extended card OK — ${extendedCard.name} v${extendedCard.version}`);
+    renderExtendedCard(extendedCard);
+    renderCapabilities(publicCard, extendedCard);
+  } catch (e) {
+    addLog('ERROR', `Extended card fetch failed: ${e.message}`);
+    document.getElementById('extCardContent').innerHTML = errorBox(e.message);
+  }
+}
+
+function renderPublicCard(card) {
+  const el = document.getElementById('publicCardContent');
+  el.innerHTML = `
+    <div class="info-grid mt8">
+      <span class="info-key">name</span>   <span class="info-val">${escapeHtml(card.name)}</span>
+      <span class="info-key">version</span><span class="info-val">${escapeHtml(card.version)}</span>
+      <span class="info-key">url</span>    <span class="info-val">${escapeHtml(card.url)}</span>
+      <span class="info-key">ext_card</span><span class="info-val">${card.supportsAuthenticatedExtendedCard ? '✅ yes' : '❌ no'}</span>
+      <span class="info-key">input</span>  <span class="info-val">${(card.defaultInputModes||[]).join(', ')}</span>
+      <span class="info-key">output</span> <span class="info-val">${(card.defaultOutputModes||[]).join(', ')}</span>
+    </div>
+    <hr class="divider">
+    <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">SKILLS (${(card.skills||[]).length})</div>
+    <div class="skills-list">
+      ${(card.skills||[]).map(s => renderSkill(s)).join('')}
+    </div>
+    <hr class="divider">
+    <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">RAW JSON</div>
+    <div class="json-viewer">${syntaxHighlightJson(card)}</div>
+  `;
+}
+
+function renderExtendedCard(card) {
+  const el = document.getElementById('extCardContent');
+  el.innerHTML = `
+    <div class="info-grid mt8">
+      <span class="info-key">name</span>   <span class="info-val" style="color:var(--accent2)">${escapeHtml(card.name)}</span>
+      <span class="info-key">version</span><span class="info-val">${escapeHtml(card.version)}</span>
+      <span class="info-key">security</span><span class="info-val">${JSON.stringify(card.security||[])}</span>
+    </div>
+    <hr class="divider">
+    <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">SKILLS (${(card.skills||[]).length})</div>
+    <div class="skills-list">
+      ${(card.skills||[]).map(s => renderSkill(s)).join('')}
+    </div>
+    <hr class="divider">
+    <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">RAW JSON</div>
+    <div class="json-viewer">${syntaxHighlightJson(card)}</div>
+  `;
+}
+
+function renderSkill(s) {
+  return `
+    <div class="skill-item">
+      <div class="skill-name">${escapeHtml(s.name || s.id)}</div>
+      <div class="skill-desc">${escapeHtml(s.description || '')}</div>
+      <div class="tags">
+        ${(s.tags||[]).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('')}
+      </div>
+      ${s.examples ? `<div style="font-size:10px;color:var(--text-dim);margin-top:5px;">e.g. ${s.examples.map(e=>`"${escapeHtml(e)}"`).join(' · ')}</div>` : ''}
+    </div>
+  `;
+}
+
+function renderCapabilities(pub, ext) {
+  const cap = pub?.capabilities || {};
+  const schemes = pub?.securitySchemes || {};
+  const el = document.getElementById('capabilitiesContent');
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div>
+        <div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;">CAPABILITIES</div>
+        <div class="cap-pills">
+          <span class="cap-pill ${cap.streaming ? 'on' : ''}">streaming ${cap.streaming ? '✓' : '✗'}</span>
+          <span class="cap-pill ${cap.pushNotifications ? 'on' : ''}">push_notifications ${cap.pushNotifications ? '✓' : '✗'}</span>
+          <span class="cap-pill ${cap.stateTransitionHistory ? 'on' : ''}">state_history ${cap.stateTransitionHistory ? '✓' : '✗'}</span>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;">SECURITY SCHEMES</div>
+        <div class="cap-pills">
+          ${Object.entries(schemes).map(([k,v]) => `<span class="cap-pill on">🔐 ${escapeHtml(k)} (${escapeHtml(v.scheme||'')})</span>`).join('')}
+          ${Object.keys(schemes).length === 0 ? '<span class="cap-pill">none</span>' : ''}
+        </div>
+      </div>
+    </div>
+    ${ext ? `
+    <hr class="divider">
+    <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">DIFF: EXTENDED vs PUBLIC</div>
+    <div style="font-size:11px;display:flex;gap:12px;flex-wrap:wrap;">
+      <span>Skills: <span style="color:var(--green)">${(ext.skills||[]).length}</span> vs <span style="color:var(--text-muted)">${(pub.skills||[]).length}</span> (public)</span>
+      <span>Name: <span style="color:var(--accent2)">"${escapeHtml(ext.name)}"</span></span>
+      <span>Version: <span style="color:var(--accent)">${escapeHtml(ext.version)}</span></span>
+    </div>
+    ` : ''}
+  `;
+}
+
+// ══════════════════════════════════════════════
+// CHAT / MESSAGING
+// ══════════════════════════════════════════════
+async function sendMessage() {
+  readInputs();
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+
+  const streaming = document.getElementById('streamToggle').checked;
+  const useAuth   = document.getElementById('authToggle').checked;
+
+  // Clear empty state
+  const messagesEl = document.getElementById('chatMessages');
+  if (messagesEl.querySelector('.chat-empty')) messagesEl.innerHTML = '';
+
+  appendMsg('user', text);
+  input.value = '';
+  input.style.height = '';
+
+  document.getElementById('modeIndicator').textContent = streaming ? 'message/stream (SSE)' : 'message/send';
+
+  const msgId = newUUID();
+  const body = buildJsonRpc(streaming ? 'message/stream' : 'message/send', {
+    message: {
+      role: 'user',
+      parts: [{ text }],
+      messageId: msgId,
+      contextId: state.contextId,
+    },
+  });
+
+  document.getElementById('rawReq').textContent = JSON.stringify(body, null, 2);
+  addLog('SEND', `POST / ${body.method} — "${text.substring(0, 60)}"`);
+
+  if (streaming) {
+    await sendStreaming(body, useAuth);
+  } else {
+    await sendNonStreaming(body, useAuth);
+  }
+}
+
+async function sendNonStreaming(body, useAuth) {
+  const agentMsgEl = appendMsg('agent', '', true);
+  try {
+    const res = await fetch(`${state.agentUrl}/`, {
+      method: 'POST',
+      headers: buildHeaders(useAuth),
+      body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    document.getElementById('rawRes').textContent = JSON.stringify(json, null, 2);
+    if (json.error) throw new Error(json.error.message || JSON.stringify(json.error));
+
+    const result = json.result;
+    const taskId = result?.id || result?.taskId;
+    if (taskId) {
+      updateCurrentTaskId(taskId);
+      addTaskToHistory(taskId, result?.status?.state || 'unknown');
+    }
+
+    const text = extractText(result);
+    const status = result?.status?.state || '';
+    updateAgentMsg(agentMsgEl, text || '(no text content)', taskId, status);
+    addLog('RECV', `message/send OK — task: ${taskId} — status: ${status}`);
+  } catch(e) {
+    updateAgentMsg(agentMsgEl, `Error: ${e.message}`, null, 'failed');
+    addLog('ERROR', `message/send failed: ${e.message}`);
+  }
+}
+
+async function sendStreaming(body, useAuth) {
+  const agentMsgEl = appendMsg('agent', '', true);
+  let buffer = '';
+  let taskId = null;
+  let lastStatus = '';
+  let pendingLine = '';
+
+  addLog('SSE', 'SSE stream opened');
+  try {
+    const res = await fetch(`${state.agentUrl}/`, {
+      method: 'POST',
+      headers: { ...buildHeaders(useAuth), 'Accept': 'text/event-stream' },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let rawLines = [];
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      rawLines.push(chunk);
+      const combined = pendingLine + chunk;
+      const lines = combined.split('\n');
+      pendingLine = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith(':')) continue;
+
+        if (trimmed.startsWith('data:')) {
+          const dataStr = trimmed.slice(5).trim();
+          if (dataStr === '[DONE]') break;
+          try {
+            const event = JSON.parse(dataStr);
+            addLog('SSE', `Event: ${JSON.stringify(event).substring(0,120)}`);
+
+            // Extract task ID
+            if (!taskId) {
+              taskId = event?.result?.id || event?.id ||
+                       event?.result?.taskId || event?.taskId ||
+                       event?.params?.id;
+              if (taskId) {
+                updateCurrentTaskId(taskId);
+              }
+            }
+
+            // Extract text from various event shapes
+            const txt = extractText(event?.result || event);
+            const status = event?.result?.status?.state ||
+                          event?.status?.state || '';
+            if (status) lastStatus = status;
+
+            if (txt) {
+              buffer = txt;
+              updateAgentMsg(agentMsgEl, buffer, taskId, status, true);
+            }
+          } catch(pe) {
+            addLog('WARN', `SSE parse error: ${pe.message} — line: ${trimmed}`);
+          }
+        }
+      }
+    }
+
+    if (pendingLine.trim().startsWith('data:')) {
+      const dataStr = pendingLine.trim().slice(5).trim();
+      if (dataStr && dataStr !== '[DONE]') {
+        try {
+          const event = JSON.parse(dataStr);
+          addLog('SSE', `Event: ${JSON.stringify(event).substring(0,120)}`);
+
+          if (!taskId) {
+            taskId = event?.result?.id || event?.id ||
+                     event?.result?.taskId || event?.taskId ||
+                     event?.params?.id;
+            if (taskId) {
+              updateCurrentTaskId(taskId);
+            }
+          }
+
+          const txt = extractText(event?.result || event);
+          const status = event?.result?.status?.state ||
+                        event?.status?.state || '';
+          if (status) lastStatus = status;
+
+          if (txt) {
+            buffer = txt;
+            updateAgentMsg(agentMsgEl, buffer, taskId, status, true);
+          }
+        } catch(pe) {
+          addLog('WARN', `SSE parse error: ${pe.message} - trailing line ignored`);
+        }
+      }
+    }
+
+    document.getElementById('rawRes').textContent = rawLines.join('');
+    if (taskId) addTaskToHistory(taskId, lastStatus || 'completed');
+    updateAgentMsg(agentMsgEl, buffer || '(stream ended with no text)', taskId, lastStatus || 'completed', false);
+    addLog('SSE', `Stream closed — task: ${taskId}`);
+  } catch(e) {
+    updateAgentMsg(agentMsgEl, `Stream error: ${e.message}`, null, 'failed');
+    addLog('ERROR', `Streaming failed: ${e.message}`);
+  }
+}
+
+function extractText(obj) {
+  if (!obj) return '';
+  // From a single artifact update event
+  if (obj.artifact?.parts?.length) {
+    for (const p of obj.artifact.parts) {
+      if (p.text) return p.text;
+      if (p.root?.text) return p.root.text;
+      if (typeof p === 'string') return p;
+    }
+  }
+  // From artifacts
+  if (obj.artifacts?.length) {
+    const parts = obj.artifacts[obj.artifacts.length-1]?.parts || [];
+    for (const p of parts) {
+      if (p.text) return p.text;
+      if (p.root?.text) return p.root.text;
+      if (typeof p === 'string') return p;
+    }
+  }
+  // From direct messages/history
+  if (obj.message?.parts?.length) {
+    for (const p of obj.message.parts) {
+      if (p.text) return p.text;
+      if (p.root?.text) return p.root.text;
+      if (typeof p === 'string') return p;
+    }
+  }
+  if (obj.history?.length) {
+    const lastEntry = obj.history[obj.history.length - 1];
+    if (lastEntry?.parts?.length) {
+      for (const p of lastEntry.parts) {
+        if (p.text) return p.text;
+        if (p.root?.text) return p.root.text;
+        if (typeof p === 'string') return p;
+      }
+    }
+  }
+  // From status message
+  const msg = obj.status?.message;
+  if (msg) {
+    for (const p of (msg.parts || [])) {
+      if (p.text) return p.text;
+      if (p.root?.text) return p.root.text;
+    }
+  }
+  // Direct
+  if (obj.text) return obj.text;
+  if (typeof obj.content === 'string') return obj.content;
+  return '';
+}
+
+// ══════════════════════════════════════════════
+// CHAT DOM HELPERS
+// ══════════════════════════════════════════════
+function appendMsg(role, text, streaming = false) {
+  const el = document.getElementById('chatMessages');
+  const id = `msg-${newUUID()}`;
+  const icons = { user: '👤', agent: '🤖', system: 'ℹ️', error: '⚠️' };
+  const labels = { user: 'You', agent: 'Agent', system: 'System', error: 'Error' };
+
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.id = id;
+  div.innerHTML = `
+    <div class="msg-avatar">${icons[role] || '?'}</div>
+    <div class="msg-body">
+      <div class="msg-role">${labels[role] || role} <span class="ts">${ts()}</span></div>
+      <div class="msg-text">${streaming && !text ? '<div class="streaming-indicator"><span></span><span></span><span></span></div>' : escapeHtml(text)}</div>
+      <div class="task-meta"></div>
+    </div>
+  `;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+  return div;
+}
+
+function updateAgentMsg(el, text, taskId, status, isStreaming = false) {
+  const textEl = el.querySelector('.msg-text');
+  const metaEl = el.querySelector('.task-meta');
+  textEl.textContent = text;
+
+  if (isStreaming && !text) {
+    textEl.innerHTML = '<div class="streaming-indicator"><span></span><span></span><span></span></div>';
+  }
+
+  if (taskId || status) {
+    const statusClass = `status-${(status || 'unknown').toLowerCase()}`;
+    metaEl.innerHTML = `
+      ${taskId ? `<span class="task-pill badge-info" style="font-size:9px;cursor:pointer;" onclick="loadTaskId('${escapeHtml(taskId)}')" title="Click to inspect">task: ${escapeHtml(taskId.substring(0,12))}…</span>` : ''}
+      ${status ? `<span class="task-pill ${statusClass}">${escapeHtml(status)}</span>` : ''}
+    `;
+  }
+  el.closest('.chat-messages, #chatMessages')?.scrollTo?.({ top: 99999 });
+}
+
+function updateCurrentTaskId(id) {
+  document.getElementById('currentTaskId').textContent = id.substring(0,16) + '…';
+  document.getElementById('taskIdInput').value = id;
+}
+
+function clearChat() {
+  document.getElementById('chatMessages').innerHTML = `
+    <div class="chat-empty">
+      <div class="empty-icon">⚡</div>
+      <div>Chat cleared</div>
+    </div>
+  `;
+  document.getElementById('currentTaskId').textContent = 'none';
+}
+
+// ══════════════════════════════════════════════
+// TASK MANAGEMENT
+// ══════════════════════════════════════════════
+async function getTask() {
+  readInputs();
+  const taskId = document.getElementById('taskIdInput').value.trim();
+  if (!taskId) return;
+  addLog('SEND', `tasks/get — ${taskId}`);
+
+  const body = buildJsonRpc('tasks/get', { id: taskId });
+  document.getElementById('rawReq').textContent = JSON.stringify(body, null, 2);
+
+  try {
+    const useAuth = document.getElementById('authToggle').checked;
+    const res = await fetch(`${state.agentUrl}/`, {
+      method: 'POST',
+      headers: buildHeaders(useAuth),
+      body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    document.getElementById('rawRes').textContent = JSON.stringify(json, null, 2);
+    if (json.error) throw new Error(json.error.message || JSON.stringify(json.error));
+
+    const task = json.result;
+    addLog('RECV', `tasks/get OK — status: ${task?.status?.state}`);
+    renderTaskResult(task);
+    if (task?.id) addTaskToHistory(task.id, task?.status?.state || 'unknown');
+  } catch(e) {
+    addLog('ERROR', `tasks/get failed: ${e.message}`);
+    document.getElementById('taskResult').innerHTML = errorBox(e.message);
+  }
+}
+
+async function cancelTask() {
+  readInputs();
+  const taskId = document.getElementById('taskIdInput').value.trim();
+  if (!taskId) return;
+  addLog('SEND', `tasks/cancel — ${taskId}`);
+
+  const body = buildJsonRpc('tasks/cancel', { id: taskId });
+  try {
+    const useAuth = document.getElementById('authToggle').checked;
+    const res = await fetch(`${state.agentUrl}/`, {
+      method: 'POST',
+      headers: buildHeaders(useAuth),
+      body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    if (json.error) throw new Error(json.error.message || JSON.stringify(json.error));
+    addLog('RECV', `tasks/cancel OK`);
+    renderTaskResult(json.result, 'Cancelled');
+  } catch(e) {
+    addLog('ERROR', `tasks/cancel failed: ${e.message}`);
+    document.getElementById('taskResult').innerHTML = errorBox(e.message);
+  }
+}
+
+function renderTaskResult(task, label = '') {
+  if (!task) {
+    document.getElementById('taskResult').innerHTML = errorBox('No task data returned');
+    return;
+  }
+  const status = task.status?.state || 'unknown';
+  const statusClass = `status-${status.toLowerCase()}`;
+  document.getElementById('taskResult').innerHTML = `
+    <div class="task-result">
+      <div class="tr-header">
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text);">${label || 'Task'} <span style="font-size:10px;color:var(--text-muted);">${escapeHtml(task.id || '')}</span></div>
+          <div style="font-size:10px;color:var(--text-dim);margin-top:2px;">Context: ${escapeHtml(task.contextId || '–')}</div>
+        </div>
+        <span class="task-pill ${statusClass}">${escapeHtml(status)}</span>
+      </div>
+      ${task.status?.message ? `<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">${escapeHtml(extractText(task))}</div>` : ''}
+      <div class="json-viewer">${syntaxHighlightJson(task)}</div>
+    </div>
+  `;
+}
+
+function addTaskToHistory(taskId, status) {
+  // Dedupe
+  if (state.taskHistory.find(t => t.id === taskId)) {
+    state.taskHistory = state.taskHistory.map(t =>
+      t.id === taskId ? { ...t, status } : t
+    );
+  } else {
+    state.taskHistory.unshift({ id: taskId, status });
+    if (state.taskHistory.length > 20) state.taskHistory.pop();
+  }
+  renderTaskHistory();
+  document.getElementById('badge-tasks').textContent = state.taskHistory.length;
+}
+
+function renderTaskHistory() {
+  const el = document.getElementById('taskHistory');
+  if (!state.taskHistory.length) {
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-dim);font-size:11px;">No tasks yet</div>';
+    return;
+  }
+  el.innerHTML = state.taskHistory.map(t => `
+    <div class="task-history-item" onclick="loadTaskId('${escapeHtml(t.id)}')">
+      <div class="thi-id">${escapeHtml(t.id)}</div>
+      <span class="task-pill status-${(t.status||'unknown').toLowerCase()} thi-status">${escapeHtml(t.status||'unknown')}</span>
+    </div>
+  `).join('');
+}
+
+function loadTaskId(id) {
+  document.getElementById('taskIdInput').value = id;
+  switchTab('tasks');
+}
+
+// ══════════════════════════════════════════════
+// PUSH NOTIFICATIONS
+// ══════════════════════════════════════════════
+async function setPushConfig() {
+  readInputs();
+  const taskId   = document.getElementById('pushTaskId').value.trim();
+  const url      = document.getElementById('pushUrl').value.trim();
+  const token    = document.getElementById('pushAuthToken').value.trim();
+  if (!taskId || !url) {
+    pushLog('err', 'Task ID and Webhook URL are required');
+    return;
+  }
+  const config = { url };
+  if (token) config.authentication = { schemes: { bearerAuth: {} }, credentials: token };
+
+  const body = buildJsonRpc('tasks/pushNotificationConfig/set', { id: taskId, pushNotificationConfig: config });
+  addLog('SEND', `tasks/pushNotificationConfig/set — task: ${taskId}`);
+  document.getElementById('rawReq').textContent = JSON.stringify(body, null, 2);
+  try {
+    const useAuth = document.getElementById('authToggle').checked;
+    const res = await fetch(`${state.agentUrl}/`, {
+      method: 'POST',
+      headers: buildHeaders(useAuth),
+      body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    document.getElementById('rawRes').textContent = JSON.stringify(json, null, 2);
+    if (json.error) throw new Error(json.error.message || JSON.stringify(json.error));
+    addLog('RECV', `Push config set OK for task: ${taskId}`);
+    pushLog('ok', `Push config registered for task ${taskId.substring(0,12)}…`);
+    showPushConfigResult(json.result || json);
+  } catch(e) {
+    addLog('ERROR', `pushNotificationConfig/set failed: ${e.message}`);
+    pushLog('err', `Failed: ${e.message}`);
+  }
+}
+
+async function getPushConfig() {
+  readInputs();
+  const taskId = document.getElementById('pushTaskId').value.trim();
+  if (!taskId) { pushLog('err', 'Task ID is required'); return; }
+
+  const body = buildJsonRpc('tasks/pushNotificationConfig/get', { id: taskId });
+  addLog('SEND', `tasks/pushNotificationConfig/get — ${taskId}`);
+  try {
+    const useAuth = document.getElementById('authToggle').checked;
+    const res = await fetch(`${state.agentUrl}/`, {
+      method: 'POST',
+      headers: buildHeaders(useAuth),
+      body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    if (json.error) throw new Error(json.error.message || JSON.stringify(json.error));
+    addLog('RECV', `Push config get OK`);
+    pushLog('info', `Push config retrieved for ${taskId.substring(0,12)}…`);
+    showPushConfigResult(json.result || json);
+  } catch(e) {
+    addLog('ERROR', `pushNotificationConfig/get failed: ${e.message}`);
+    pushLog('err', `Failed: ${e.message}`);
+  }
+}
+
+function showPushConfigResult(data) {
+  const box = document.getElementById('pushConfigResult');
+  box.style.display = 'block';
+  document.getElementById('pushConfigJson').innerHTML = syntaxHighlightJson(data);
+}
+
+function simulatePushEvent() {
+  const taskId = document.getElementById('pushTaskId').value || newUUID();
+  const payload = {
+    taskId,
+    status: { state: 'completed' },
+    timestamp: new Date().toISOString(),
+    artifacts: [{ parts: [{ text: 'The answer is 42.' }] }],
+  };
+  pushLog('info', `PUSH RECEIVED: ${JSON.stringify(payload)}`);
+  showPushConfigResult(payload);
+}
+
+function pushLog(type, msg) {
+  const el = document.getElementById('pushLog');
+  if (el.children.length === 1 && el.children[0].querySelector('.ple-text')?.textContent.includes('Waiting')) {
+    el.innerHTML = '';
+  }
+  const cls = type === 'ok' ? 'ok' : type === 'err' ? 'err' : 'info';
+  const div = document.createElement('div');
+  div.className = 'push-log-entry';
+  div.innerHTML = `<span class="ple-time">${ts()}</span><span class="ple-text ${cls}">${escapeHtml(msg)}</span>`;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+
+function clearPushLog() {
+  document.getElementById('pushLog').innerHTML = `
+    <div class="push-log-entry">
+      <span class="ple-time">--:--:--</span>
+      <span class="ple-text">Log cleared…</span>
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════════
+// UI HELPERS
+// ══════════════════════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll('.nav-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === name);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => {
+    p.classList.toggle('active', p.id === `tab-${name}`);
+  });
+}
+
+function setConnStatus(status, label) {
+  const dot = document.getElementById('connDot');
+  const lbl = document.getElementById('connLabel');
+  dot.className = `conn-dot ${status === 'online' ? 'online' : status === 'error' ? 'error' : ''}`;
+  lbl.textContent = label;
+}
+
+function toggleRawDrawer() {
+  document.getElementById('rawDrawer').classList.toggle('open');
+}
+
+function handleChatKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function newContext() {
+  state.contextId = newUUID();
+  document.getElementById('contextId').value = state.contextId;
+  addLog('INFO', `New context ID: ${state.contextId}`);
+}
+
+function copyContextId() {
+  navigator.clipboard.writeText(state.contextId);
+}
+
+function clearLogs() {
+  document.getElementById('logBody').innerHTML = '<div style="color:var(--text-dim);font-size:11px;padding:12px 0;">Logs cleared</div>';
+  state.logCount = 0;
+  document.getElementById('badge-logs').textContent = '0';
+}
+
+function exportLogs() {
+  const entries = document.querySelectorAll('.log-entry');
+  const text = Array.from(entries).map(e => e.textContent.replace(/\s+/g, ' ').trim()).join('\n');
+  const blob = new Blob([text], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `a2a-log-${Date.now()}.txt`;
+  a.click();
+}
+
+function errorBox(msg) {
+  return `<div style="background:rgba(255,71,87,0.07);border:1px solid rgba(255,71,87,0.25);border-radius:6px;padding:12px;font-size:11px;color:var(--red);">⚠️ ${escapeHtml(msg)}</div>`;
+}
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+document.getElementById('contextId').value = state.contextId;
+addLog('INFO', 'A2A Test Console ready. Set Agent URL and click Connect.');
+</script>
+</body>
+</html>

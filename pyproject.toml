@@ -1,0 +1,27 @@
+[project]
+name = "basic-a2a-langchain-example"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "a2a-sdk>=0.3.23",
+    "click>=8.3.1",
+    "fastapi>=0.121.1",
+    "google-adk>=1.25.0",
+    "langchain>=1.2.3",
+    "langchain-core>=1.2.7",
+    "langchain-openai>=1.1.7",
+    "langgraph>=1.0.5",
+    "litellm>=1.80.13",
+    "python-dotenv>=1.2.1",
+    "sqlalchemy>=2.0.44",
+    "sse-starlette>=3.1.2",
+    "starlette>=0.51.0",
+    "uvicorn>=0.40.0",
+]
+
+[tool.uv.workspace]
+members = [
+    "test",
+]
